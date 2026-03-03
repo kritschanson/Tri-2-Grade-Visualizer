@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grade Weight Visualizer</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f7f4ef;
+    --ink: #1a1a1a;
+    --assess-color: #d64f2a;
+    --assess-light: #f5c4b8;
+    --lc-color: #7c3aed;
+    --lc-light: #ddd6fe;
+    --class-color: #2a9d4e;
+    --class-light: #b8f5ce;
+    --locked-color: #888;
+    --locked-light: #ddd;
+    --empty: #e0dbd3;
+    --card-bg: #fff;
+    --border: #d0cbc3;
+    --shadow: 4px 4px 0px #1a1a1a;
+    --warning: #b45309;
+    --warning-bg: #fef3c7;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    font-family: 'DM Sans', sans-serif;
+    color: var(--ink);
+    min-height: 100vh;
+    padding: 24px 16px 48px;
+  }
+  h1 {
+    font-family: 'Bebas Neue', cursive;
+    font-size: clamp(2.2rem, 5vw, 3.6rem);
+    letter-spacing: 0.04em;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .subtitle { font-size: 0.9rem; color: #666; margin-bottom: 24px; }
+  .main-layout {
+    display: grid;
+    grid-template-columns: 1fr 400px;
+    gap: 24px;
+    max-width: 1160px;
+    margin: 0 auto;
+  }
+  @media (max-width: 880px) { .main-layout { grid-template-columns: 1fr; } }
+
+  /* GRID CARD */
+  .grid-card {
+    background: var(--card-bg);
+    border: 2px solid var(--ink);
+    box-shadow: var(--shadow);
+    padding: 20px;
+    position: sticky;
+    top: 20px;
+    align-self: start;
+  }
+  .legend-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+    font-size: 0.74rem;
+    font-weight: 600;
+    flex-wrap: wrap;
+  }
+  .legend-item { display: flex; align-items: center; gap: 5px; }
+  .legend-dot { display: inline-block; width: 12px; height: 12px; border: 1.5px solid var(--ink); flex-shrink: 0; }
+  #hundred-grid {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 3px;
+  }
+  .sq {
+    aspect-ratio: 1;
+    border: 1.5px solid var(--ink);
+    background: var(--empty);
+    transition: transform 0.08s;
+    position: relative;
+    cursor: default;
+  }
+  .sq:hover { transform: scale(1.18); z-index: 10; }
+  .sq.assess-filled  { background: var(--assess-color); }
+  .sq.assess-missed  { background: var(--assess-light); }
+  .sq.lc-filled      { background: var(--lc-color); }
+  .sq.lc-missed      { background: var(--lc-light); }
+  .sq.class-filled   { background: var(--class-color); }
+  .sq.class-missed   { background: var(--class-light); }
+  .sq.class-locked {
+    background: repeating-linear-gradient(45deg, var(--locked-light) 0px, var(--locked-light) 3px, #fff 3px, #fff 6px);
+  }
+  .sq .sq-tip {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 5px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--ink);
+    color: #fff;
+    font-size: 0.68rem;
+    white-space: nowrap;
+    padding: 3px 7px;
+    z-index: 20;
+    pointer-events: none;
+  }
+  .sq:hover .sq-tip { display: block; }
+  .grade-display {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 2px solid var(--border);
+    text-align: center;
+  }
+  .grade-number { font-family: 'Bebas Neue', cursive; font-size: 3.4rem; line-height: 1; }
+  .grade-letter { font-family: 'Bebas Neue', cursive; font-size: 1.8rem; color: #888; margin-left: 10px; }
+  .grade-breakdown { display: flex; justify-content: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+  .breakdown-pill { font-size: 0.73rem; font-weight: 600; padding: 3px 10px; border: 1.5px solid; }
+  .sq-info { font-size: 0.77rem; color: #777; margin-top: 8px; text-align: center; line-height: 1.5; }
+
+  /* BAR GRAPH */
+  .bar-graph-wrap { margin-top: 16px; padding-top: 14px; border-top: 2px solid var(--border); }
+  .bar-graph-title { font-family: 'Bebas Neue', cursive; font-size: 1rem; letter-spacing: 0.06em; margin-bottom: 10px; text-align: left; }
+  .bar-track {
+    position: relative;
+    height: 38px;
+    background: var(--empty);
+    border: 2px solid var(--ink);
+    overflow: visible;
+  }
+  .bar-segments { display: flex; height: 100%; overflow: hidden; }
+  .bar-seg { height: 100%; transition: width 0.4s ease; flex-shrink: 0; }
+  .bar-threshold { position: absolute; top: -8px; bottom: -28px; width: 2px; background: var(--ink); pointer-events: none; }
+  .bar-threshold-label { position: absolute; bottom: -26px; transform: translateX(-50%); font-family: 'Bebas Neue', cursive; font-size: 0.85rem; white-space: nowrap; color: var(--ink); }
+  .bar-threshold-grade { position: absolute; top: -20px; transform: translateX(-50%); font-family: 'Bebas Neue', cursive; font-size: 0.95rem; white-space: nowrap; }
+  .bar-outer { margin-bottom: 32px; }
+  .bar-axis { position: relative; height: 20px; margin-top: 2px; }
+  .bar-axis-label { position: absolute; font-size: 0.68rem; color: #888; transform: translateX(-50%); }
+
+  /* SIDEBAR */
+  .sidebar { display: flex; flex-direction: column; gap: 14px; }
+  .info-card {
+    background: var(--card-bg);
+    border: 2px solid var(--ink);
+    box-shadow: var(--shadow);
+    padding: 14px;
+    font-size: 0.82rem;
+    line-height: 1.6;
+    color: #444;
+  }
+  .info-card-title { font-family: 'Bebas Neue', cursive; font-size: 1.1rem; letter-spacing: 0.06em; margin-bottom: 8px; }
+  .weight-bar-wrap { display: flex; height: 10px; border: 1.5px solid var(--ink); margin-bottom: 4px; overflow: hidden; }
+  .weight-labels { display: flex; justify-content: space-between; font-size: 0.7rem; font-weight: 600; margin-bottom: 10px; flex-wrap: wrap; gap: 4px; }
+
+  /* UNIT CARDS */
+  .unit-card { background: var(--card-bg); border: 2px solid var(--ink); box-shadow: var(--shadow); overflow: hidden; }
+  .unit-card.window-closed { border-color: var(--locked-color); box-shadow: 4px 4px 0px var(--locked-color); }
+  .unit-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 14px; background: var(--ink); color: #fff;
+    cursor: pointer; user-select: none; gap: 8px;
+  }
+  .unit-card.window-closed .unit-header { background: var(--locked-color); }
+  .unit-header-title { font-family: 'Bebas Neue', cursive; font-size: 1.1rem; letter-spacing: 0.06em; flex: 1; }
+  .unit-chevron { font-size: 0.75rem; }
+  .unit-body { padding: 12px 14px; }
+  .unit-body.collapsed { display: none; }
+
+  /* UNIT GRADE SUMMARY BAR */
+  .unit-grade-bar-wrap { margin-bottom: 12px; padding: 10px 12px; background: var(--bg); border: 1.5px solid var(--border); }
+  .unit-grade-bar-label { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; font-size: 0.75rem; font-weight: 600; color: #555; }
+  .unit-grade-pct { font-family: 'Bebas Neue', cursive; font-size: 1.3rem; color: var(--ink); }
+  .unit-bar-track { height: 10px; background: var(--empty); border: 1.5px solid var(--ink); overflow: hidden; display: flex; }
+  .unit-bar-seg { height: 100%; transition: width 0.3s ease; flex-shrink: 0; }
+  .unit-cat-pills { display: flex; gap: 6px; margin-top: 7px; flex-wrap: wrap; }
+  .unit-cat-pill { font-size: 0.68rem; font-weight: 600; padding: 2px 7px; border: 1.5px solid; }
+  .unit-cat-pill.no-data { color: #aaa; border-color: #ddd; }
+
+  /* DEADLINE TOGGLE */
+  .deadline-banner {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 8px 10px; margin-bottom: 12px;
+    background: var(--warning-bg); border: 1.5px solid #fcd34d;
+    font-size: 0.78rem; font-weight: 600; color: var(--warning);
+  }
+  .deadline-banner.closed { background: #f3f4f6; border-color: var(--locked-color); color: var(--locked-color); }
+  .deadline-banner-text { flex: 1; line-height: 1.4; }
+  .toggle-wrap { display: flex; align-items: center; gap: 6px; font-size: 0.72rem; white-space: nowrap; cursor: pointer; flex-shrink: 0; }
+  .toggle-switch { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .toggle-slider { position: absolute; inset: 0; background: #fcd34d; border: 1.5px solid var(--warning); cursor: pointer; transition: background 0.2s; }
+  .toggle-slider:before { content: ''; position: absolute; width: 14px; height: 14px; left: 2px; top: 1px; background: var(--warning); transition: transform 0.2s; }
+  .toggle-switch input:checked + .toggle-slider { background: var(--locked-light); border-color: var(--locked-color); }
+  .toggle-switch input:checked + .toggle-slider:before { transform: translateX(16px); background: var(--locked-color); }
+  .assign-row.locked .assign-name { color: #aaa; text-decoration: line-through; }
+  .assign-row.locked .score-wrap input { background: #f3f4f6; color: #aaa; border-color: #ddd; pointer-events: none; }
+  .zero-badge { font-size: 0.68rem; font-weight: 700; color: #fff; background: var(--locked-color); padding: 1px 5px; margin-left: 4px; }
+
+  /* ASSIGNMENT ROWS */
+  .cat-section { margin-bottom: 12px; }
+  .cat-section:last-child { margin-bottom: 0; }
+  .cat-label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; padding-bottom: 3px; border-bottom: 1.5px solid; }
+  .cat-label.assess { color: var(--assess-color); border-color: var(--assess-light); }
+  .cat-label.lc     { color: var(--lc-color);     border-color: var(--lc-light); }
+  .cat-label.class  { color: var(--class-color);   border-color: var(--class-light); }
+  .assign-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; margin-bottom: 5px; font-size: 0.82rem; }
+  .assign-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #333; display: flex; align-items: center; }
+  .score-wrap { display: flex; align-items: center; gap: 3px; font-size: 0.78rem; color: #999; white-space: nowrap; }
+  .score-wrap input {
+    width: 36px; padding: 3px 4px; border: 1.5px solid var(--border);
+    font-family: 'DM Sans', sans-serif; font-size: 0.82rem; background: var(--bg); text-align: center;
+    -moz-appearance: textfield;
+  }
+  .score-wrap input::-webkit-outer-spin-button,
+  .score-wrap input::-webkit-inner-spin-button { -webkit-appearance: none; }
+  .score-wrap input:focus { outline: none; border-color: var(--ink); background: #fff; }
+  .score-wrap input.over { border-color: #c00; background: #fff0f0; }
+  .reassess-row {
+    display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center;
+    margin-bottom: 5px; font-size: 0.82rem; padding: 6px 8px;
+    background: #fff8f0; border: 1.5px dashed #fcd34d;
+  }
+  .reassess-row .assign-name { color: var(--warning); font-weight: 600; }
+  .reassess-row.locked-row .assign-name { color: #aaa; text-decoration: line-through; font-weight: normal; }
+  .reassess-row.locked-row .score-wrap input { background: #f3f4f6; color: #aaa; border-color: #ddd; pointer-events: none; }
+</style>
+</head>
+<body>
+
+<div style="max-width:1160px;margin:0 auto;">
+  <h1>Your Grade, Visualized</h1>
+  <p class="subtitle">Each of the 100 squares = 1% of your final grade &nbsp;·&nbsp; 85 squares = Assessments &nbsp;·&nbsp; 10 squares = Learning Checks &nbsp;·&nbsp; 5 squares = Classwork</p>
+</div>
+
+<div class="main-layout">
+
+  <div class="grid-card">
+    <div class="legend-row">
+      <div class="legend-item"><span class="legend-dot" style="background:var(--assess-color)"></span>Assessment earned</div>
+      <div class="legend-item"><span class="legend-dot" style="background:var(--assess-light)"></span>Assessment missed</div>
+      <div class="legend-item"><span class="legend-dot" style="background:var(--lc-color)"></span>LC earned</div>
+      <div class="legend-item"><span class="legend-dot" style="background:var(--lc-light)"></span>LC missed</div>
+      <div class="legend-item"><span class="legend-dot" style="background:var(--class-color)"></span>Classwork earned</div>
+      <div class="legend-item"><span class="legend-dot" style="background:var(--class-light)"></span>Classwork missed</div>
+      <div class="legend-item">
+        <span class="legend-dot" style="background:repeating-linear-gradient(45deg,#ddd 0px,#ddd 3px,#fff 3px,#fff 6px)"></span>
+        Classwork locked (0)
+      </div>
+      <div class="legend-item"><span class="legend-dot" style="background:var(--empty)"></span>Not graded yet</div>
+    </div>
+
+    <div id="hundred-grid"></div>
+
+    <div class="grade-display">
+      <div>
+        <span class="grade-number" id="grade-pct">—</span>
+        <span class="grade-letter" id="grade-letter"></span>
+      </div>
+      <div class="grade-breakdown" id="grade-breakdown"></div>
+      <div class="sq-info" id="sq-info">Enter your scores on the right to see your grade.</div>
+
+      <div class="bar-graph-wrap">
+        <div class="bar-graph-title">Grade Breakdown</div>
+        <div class="bar-outer">
+          <div class="bar-track" id="bar-track">
+            <div class="bar-segments" id="bar-segments">
+              <div class="bar-seg" id="bseg-assess" style="width:0%;background:var(--assess-color)"></div>
+              <div class="bar-seg" id="bseg-lc"     style="width:0%;background:var(--lc-color)"></div>
+              <div class="bar-seg" id="bseg-class"  style="width:0%;background:var(--class-color)"></div>
+            </div>
+          </div>
+          <div class="bar-axis" id="bar-axis"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="info-card">
+      <div class="info-card-title">How Your Grade is Weighted</div>
+      <div class="weight-bar-wrap">
+        <div style="width:85%;background:var(--assess-color);height:100%"></div>
+        <div style="width:10%;background:var(--lc-color);height:100%"></div>
+        <div style="width:5%;background:var(--class-color);height:100%"></div>
+      </div>
+      <div class="weight-labels">
+        <span style="color:var(--assess-color)">Assessments 85%</span>
+        <span style="color:var(--lc-color)">Learning Checks 10%</span>
+        <span style="color:var(--class-color)">Classwork 5%</span>
+      </div>
+      Even a <strong>perfect Classwork score</strong> only fills <strong>5 squares</strong>. Assessments control <strong>85 squares</strong> — that's where your grade lives.
+    </div>
+
+    <div id="units-container"></div>
+  </div>
+</div>
+
+<script>
+const UNITS = [
+  {
+    name: "Unit 4 — WWI",
+    assignments: [
+      { name: "4A: Uncover the Picture",   cat: "class",  max: 5  },
+      { name: "4B: WWI Vocabulary",         cat: "class",  max: 5  },
+      { name: "4C: WWI Reading Notes",      cat: "class",  max: 5  },
+      { name: "Learning Check #1",          cat: "lc",     max: 10 },
+      { name: "4D: Making Inferences",      cat: "class",  max: 5  },
+      { name: "Learning Check #2",          cat: "lc",     max: 10 },
+      { name: "Unit 4 Test",                cat: "assess", max: 15 },
+    ]
+  },
+  {
+    name: "Unit 5 — The 1920s",
+    assignments: [
+      { name: "5A: GIST 1920's",            cat: "class",  max: 5  },
+      { name: "5B: 1920's Vocab Cards",     cat: "class",  max: 5  },
+      { name: "5C: 1920's Reading Notes",   cat: "class",  max: 5  },
+      { name: "Learning Check #1",          cat: "lc",     max: 10 },
+      { name: "5D: Making Inferences",      cat: "class",  max: 5  },
+      { name: "Learning Check #2",          cat: "lc",     max: 10 },
+      { name: "Unit 5 Test",                cat: "assess", max: 15 },
+    ]
+  },
+  {
+    name: "Unit 6 — Great Depression",
+    assignments: [
+      { name: "6A: Image Prediction",       cat: "class",  max: 5  },
+      { name: "6B: 1920's Vocab Cards",     cat: "class",  max: 5  },
+      { name: "6C: Great Depression Notes", cat: "class",  max: 5  },
+      { name: "Learning Check #1",          cat: "lc",     max: 10 },
+      { name: "6D: Determine Chronology",   cat: "class",  max: 5  },
+      { name: "6E: Cause & Effect",         cat: "class",  max: 5  },
+      { name: "Learning Check #2",          cat: "lc",     max: 10 },
+      { name: "Unit 6 Test",                cat: "assess", max: 15 },
+    ]
+  },
+  {
+    name: "Unit 7 — WWII",
+    assignments: [
+      { name: "7A: Search and Share",       cat: "class",  max: 5  },
+      { name: "7B: Vocab Cards",            cat: "class",  max: 5  },
+      { name: "7C: Text, Recall & Summary", cat: "class",  max: 5  },
+      { name: "Learning Check #1",          cat: "lc",     max: 10 },
+      { name: "7D: Analyze Sources",        cat: "class",  max: 5  },
+      { name: "Learning Check #2",          cat: "lc",     max: 10 },
+      { name: "Unit 7 Test",                cat: "assess", max: 15 },
+    ]
+  }
+];
+
+const scores        = UNITS.map(u => u.assignments.map(() => null));
+const reassessScores = UNITS.map(() => null);
+const windowClosed  = UNITS.map(() => false);
+
+// ---- Grid ----
+function buildGrid() {
+  const grid = document.getElementById('hundred-grid');
+  grid.innerHTML = '';
+  for (let i = 0; i < 100; i++) {
+    const sq = document.createElement('div');
+    sq.className = 'sq';
+    sq.dataset.i = i;
+    const tip = document.createElement('span');
+    tip.className = 'sq-tip';
+    sq.appendChild(tip);
+    grid.appendChild(sq);
+  }
+}
+
+function effectiveScore(ui, ai) {
+  const a = UNITS[ui].assignments[ai];
+  if (a.cat !== 'class') return scores[ui][ai];
+  if (scores[ui][ai] !== null) return scores[ui][ai];
+  if (windowClosed[ui]) return 0;
+  return null;
+}
+
+// Keep the HIGHER of original and reassess scores
+function effectiveTestScore(ui) {
+  const testIdx = UNITS[ui].assignments.findIndex(a => a.cat === 'assess');
+  if (testIdx === -1) return null;
+  const original = scores[ui][testIdx];
+  const reassess = reassessScores[ui];
+  if (original === null && reassess === null) return null;
+  if (original === null) return reassess;
+  if (reassess === null) return original;
+  return Math.max(original, reassess);
+}
+
+// Only count assignments that have been entered (or locked to 0)
+function catTotals(cat) {
+  let earned = 0, possible = 0, hasAny = false;
+  UNITS.forEach((u, ui) => {
+    u.assignments.forEach((a, ai) => {
+      if (a.cat !== cat) return;
+      const s = cat === 'assess' ? effectiveTestScore(ui) : effectiveScore(ui, ai);
+      if (s !== null) { earned += s; possible += a.max; hasAny = true; }
+    });
+  });
+  return hasAny ? { ratio: earned / possible, earned, possible } : null;
+}
+
+// Per-unit breakdown for the unit summary bars
+function unitCatTotals(ui, cat) {
+  let earned = 0, possible = 0, hasAny = false;
+  UNITS[ui].assignments.forEach((a, ai) => {
+    if (a.cat !== cat) return;
+    const s = cat === 'assess' ? effectiveTestScore(ui) : effectiveScore(ui, ai);
+    if (s !== null) { earned += s; possible += a.max; hasAny = true; }
+  });
+  return hasAny ? { ratio: earned / possible, earned, possible } : null;
+}
+
+// Classwork grid data: only scored + locked-zero entries count
+function classworkGridData() {
+  let earned = 0, possible = 0, lockedZeroMax = 0;
+  UNITS.forEach((u, ui) => {
+    u.assignments.forEach((a, ai) => {
+      if (a.cat !== 'class') return;
+      const s = scores[ui][ai];
+      if (s !== null) {
+        earned += s;
+        possible += a.max;
+      } else if (windowClosed[ui]) {
+        lockedZeroMax += a.max;
+        possible += a.max;
+      }
+    });
+  });
+  return { earned, possible, lockedZeroMax };
+}
+
+function renderGrid() {
+  const aData = catTotals('assess');
+  const lData = catTotals('lc');
+  const cData = catTotals('class');
+
+  fillRange(0,  85, aData ? aData.ratio : null, 'assess-filled', 'assess-missed', 'Assessment');
+  fillRange(85, 10, lData ? lData.ratio : null, 'lc-filled',     'lc-missed',     'Learning Check');
+  renderClassworkSquares();
+
+  const gradeEl  = document.getElementById('grade-pct');
+  const letterEl = document.getElementById('grade-letter');
+  const bdEl     = document.getElementById('grade-breakdown');
+  const infoEl   = document.getElementById('sq-info');
+
+  let totalPts = 0, totalWt = 0;
+  if (aData) { totalPts += aData.ratio * 85; totalWt += 85; }
+  if (lData) { totalPts += lData.ratio * 10; totalWt += 10; }
+  if (cData) { totalPts += cData.ratio * 5;  totalWt += 5;  }
+
+  if (totalWt === 0) {
+    gradeEl.textContent  = '—';
+    letterEl.textContent = '';
+    bdEl.innerHTML       = '';
+    infoEl.textContent   = 'Enter your scores on the right to see your grade.';
+    renderBar();
+    return;
+  }
+
+  const pct        = (totalPts / totalWt) * 100;
+  const roundedPct = Math.round(pct * 10) / 10; // .5 rounds up
+  gradeEl.textContent  = roundedPct.toFixed(1) + '%';
+  letterEl.textContent = letterGrade(pct);
+
+  const pills = [];
+  if (aData) pills.push(`<span class="breakdown-pill" style="border-color:var(--assess-color);color:var(--assess-color)">Tests: ${(aData.ratio*100).toFixed(0)}% → ${(aData.ratio*85).toFixed(1)} pts</span>`);
+  if (lData) pills.push(`<span class="breakdown-pill" style="border-color:var(--lc-color);color:var(--lc-color)">LCs: ${(lData.ratio*100).toFixed(0)}% → ${(lData.ratio*10).toFixed(1)} pts</span>`);
+  if (cData) pills.push(`<span class="breakdown-pill" style="border-color:var(--class-color);color:var(--class-color)">CW: ${(cData.ratio*100).toFixed(0)}% → ${(cData.ratio*5).toFixed(1)} pts</span>`);
+  bdEl.innerHTML = pills.join('');
+  infoEl.textContent = 'Each shaded square = 1 percentage point earned toward your final grade.';
+
+  renderBar();
+  UNITS.forEach((_, ui) => updateUnitSummaryBar(ui));
+}
+
+function renderClassworkSquares() {
+  const cw    = classworkGridData();
+  const total = cw.possible;
+
+  if (total === 0) {
+    for (let i = 95; i < 100; i++) setSq(i, '', 'Classwork (no score yet)');
+    return;
+  }
+
+  const earnedSqs = (cw.earned / total) * 5;
+  const lockedSqs = (cw.lockedZeroMax / total) * 5;
+  const earnedFull = Math.floor(earnedSqs);
+  const earnedFrac = earnedSqs - earnedFull;
+
+  for (let i = 0; i < 5; i++) {
+    let cls = '', tip = '', frac;
+    if (i < earnedFull) {
+      cls = 'class-filled'; tip = 'Classwork: earned (+1%)';
+    } else if (i === earnedFull && earnedFrac >= 0.02) {
+      cls = 'class-filled'; tip = `Classwork: ${Math.round(earnedFrac*100)}% of square earned`; frac = earnedFrac;
+    } else {
+      const lockedStart = earnedSqs;
+      const lockedEnd   = earnedSqs + lockedSqs;
+      if (i >= lockedStart && i < lockedEnd) {
+        cls = 'class-locked'; tip = 'Classwork: window closed — counts as 0';
+      } else {
+        cls = 'class-missed'; tip = 'Classwork: not yet earned';
+      }
+    }
+    setSq(95 + i, cls, tip, frac);
+  }
+}
+
+function fillRange(start, count, avg, filledCls, missedCls, label) {
+  if (avg === null) {
+    for (let i = start; i < start + count; i++) setSq(i, '', label + ' (no score yet)');
+    return;
+  }
+  const filled = avg * count;
+  const full   = Math.floor(filled);
+  const frac   = filled - full;
+  for (let i = start; i < start + count; i++) {
+    const rel = i - start;
+    if (rel < full) {
+      setSq(i, filledCls, label + ': earned (+1%)');
+    } else if (rel === full && frac >= 0.02) {
+      setSq(i, filledCls, `${label}: ${Math.round(frac*100)}% of square earned`, frac);
+    } else {
+      setSq(i, missedCls, label + ': not yet earned');
+    }
+  }
+}
+
+function setSq(i, cls, tip, frac) {
+  const sq = document.querySelector(`.sq[data-i="${i}"]`);
+  if (!sq) return;
+  sq.className = 'sq' + (cls ? ' ' + cls : '');
+  sq.querySelector('.sq-tip').textContent = tip;
+  if (frac !== undefined && frac > 0 && frac < 1) {
+    const pct = Math.round(frac * 100);
+    const colorMap = {
+      'assess-filled': 'var(--assess-color)',
+      'lc-filled':     'var(--lc-color)',
+      'class-filled':  'var(--class-color)',
+    };
+    sq.style.background = `linear-gradient(to top, ${colorMap[cls] || 'var(--empty)'} ${pct}%, var(--empty) ${pct}%)`;
+  } else {
+    sq.style.background = '';
+  }
+}
+
+// .5 rounds up to the next letter grade
+function letterGrade(p) {
+  const r = Math.round(p * 10) / 10;
+  if (r >= 90) return 'A';
+  if (r >= 80) return 'B';
+  if (r >= 70) return 'C';
+  if (r >= 60) return 'D';
+  return 'F';
+}
+
+// ---- Unit Summary Bar ----
+function updateUnitSummaryBar(ui) {
+  const aData = unitCatTotals(ui, 'assess');
+  const lData = unitCatTotals(ui, 'lc');
+  const cData = unitCatTotals(ui, 'class');
+
+  const wrap = document.getElementById(`unit-summary-${ui}`);
+  if (!wrap) return;
+
+  let totalPts = 0, totalWt = 0;
+  if (aData) { totalPts += aData.ratio * 85; totalWt += 85; }
+  if (lData) { totalPts += lData.ratio * 10; totalWt += 10; }
+  if (cData) { totalPts += cData.ratio * 5;  totalWt += 5;  }
+
+  const pctEl = wrap.querySelector('.unit-grade-pct');
+  const track = wrap.querySelector('.unit-bar-track');
+  const pills = wrap.querySelector('.unit-cat-pills');
+
+  if (totalWt === 0) {
+    pctEl.textContent = '—';
+    track.innerHTML = '';
+    pills.innerHTML = '<span class="unit-cat-pill no-data">No scores entered yet</span>';
+    return;
+  }
+
+  const unitPct = (totalPts / totalWt) * 100;
+  const roundedUnitPct = Math.round(unitPct * 10) / 10;
+  pctEl.textContent = roundedUnitPct.toFixed(1) + '%  ' + letterGrade(unitPct);
+
+  const aW = aData ? (aData.ratio * 85 / totalWt * 100) : 0;
+  const lW = lData ? (lData.ratio * 10 / totalWt * 100) : 0;
+  const cW = cData ? (cData.ratio *  5 / totalWt * 100) : 0;
+  const eW = Math.max(0, 100 - aW - lW - cW);
+
+  track.innerHTML = `
+    <div class="unit-bar-seg" style="width:${aW}%;background:var(--assess-color)"></div>
+    <div class="unit-bar-seg" style="width:${lW}%;background:var(--lc-color)"></div>
+    <div class="unit-bar-seg" style="width:${cW}%;background:var(--class-color)"></div>
+    <div class="unit-bar-seg" style="width:${eW}%;background:var(--empty)"></div>
+  `;
+
+  let pillsHtml = '';
+  if (aData) pillsHtml += `<span class="unit-cat-pill" style="border-color:var(--assess-color);color:var(--assess-color)">Test: ${aData.earned}/${aData.possible}</span>`;
+  if (lData) pillsHtml += `<span class="unit-cat-pill" style="border-color:var(--lc-color);color:var(--lc-color)">LCs: ${lData.earned}/${lData.possible}</span>`;
+  if (cData) pillsHtml += `<span class="unit-cat-pill" style="border-color:var(--class-color);color:var(--class-color)">CW: ${cData.earned}/${cData.possible}</span>`;
+  pills.innerHTML = pillsHtml;
+}
+
+// ---- Build Unit Cards ----
+function buildUnits() {
+  const container = document.getElementById('units-container');
+  container.innerHTML = '';
+
+  UNITS.forEach((unit, ui) => {
+    const card = document.createElement('div');
+    card.className = 'unit-card';
+    card.id = `ucard-${ui}`;
+
+    const header = document.createElement('div');
+    header.className = 'unit-header';
+    header.innerHTML = `
+      <span class="unit-header-title">${unit.name}</span>
+      <span class="unit-chevron" id="chev-${ui}">${ui === 0 ? '▲' : '▼'}</span>
+    `;
+
+    const body = document.createElement('div');
+    body.className = 'unit-body' + (ui > 0 ? ' collapsed' : '');
+    body.id = `ubody-${ui}`;
+
+    header.addEventListener('click', () => {
+      body.classList.toggle('collapsed');
+      document.getElementById(`chev-${ui}`).textContent =
+        body.classList.contains('collapsed') ? '▼' : '▲';
+    });
+
+    // Unit Summary Bar
+    const summaryWrap = document.createElement('div');
+    summaryWrap.className = 'unit-grade-bar-wrap';
+    summaryWrap.id = `unit-summary-${ui}`;
+    summaryWrap.innerHTML = `
+      <div class="unit-grade-bar-label">
+        <span>This unit (graded work only)</span>
+        <span class="unit-grade-pct">—</span>
+      </div>
+      <div class="unit-bar-track"></div>
+      <div class="unit-cat-pills"><span class="unit-cat-pill no-data">No scores entered yet</span></div>
+    `;
+    body.appendChild(summaryWrap);
+
+    // Deadline Banner + Toggle
+    const banner = document.createElement('div');
+    banner.className = 'deadline-banner';
+    banner.id = `banner-${ui}`;
+
+    const bannerText = document.createElement('div');
+    bannerText.className = 'deadline-banner-text';
+    bannerText.id = `banner-text-${ui}`;
+    bannerText.innerHTML = `⏰ <strong>Reassess window is open.</strong> You have 2 weeks after your test is returned to reassess and turn in missing classwork.`;
+
+    const toggleWrap = document.createElement('label');
+    toggleWrap.className = 'toggle-wrap';
+    toggleWrap.innerHTML = `
+      <span id="toggle-label-${ui}">Open</span>
+      <div class="toggle-switch">
+        <input type="checkbox" id="toggle-${ui}">
+        <div class="toggle-slider"></div>
+      </div>
+    `;
+    toggleWrap.addEventListener('click', e => e.stopPropagation());
+    toggleWrap.querySelector('input').addEventListener('change', () => {
+      windowClosed[ui] = toggleWrap.querySelector('input').checked;
+      updateUnitLockedState(ui);
+      renderGrid();
+    });
+
+    banner.appendChild(bannerText);
+    banner.appendChild(toggleWrap);
+    body.appendChild(banner);
+
+    // Assignments by category
+    const catOrder = ['assess', 'lc', 'class'];
+    const catMeta  = {
+      assess: { label: 'Assessment (out of 15)', cls: 'assess' },
+      lc:     { label: 'Learning Checks (out of 10)', cls: 'lc' },
+      class:  { label: 'Classwork (out of 5)', cls: 'class' },
+    };
+
+    catOrder.forEach(cat => {
+      const items = unit.assignments.map((a, ai) => ({ ...a, ai })).filter(a => a.cat === cat);
+      if (!items.length) return;
+
+      const sec = document.createElement('div');
+      sec.className = 'cat-section';
+
+      const lbl = document.createElement('div');
+      lbl.className = `cat-label ${catMeta[cat].cls}`;
+      lbl.textContent = catMeta[cat].label;
+      sec.appendChild(lbl);
+
+      items.forEach(({ name, max, ai }) => {
+        const row = document.createElement('div');
+        row.className = 'assign-row';
+        row.id = `row-${ui}-${ai}`;
+
+        const nameDiv = document.createElement('div');
+        nameDiv.className = 'assign-name';
+        nameDiv.title = name;
+        nameDiv.textContent = name;
+
+        const wrap = document.createElement('div');
+        wrap.className = 'score-wrap';
+
+        const inp = document.createElement('input');
+        inp.type = 'number'; inp.min = '0'; inp.max = String(max); inp.placeholder = '—';
+        inp.id = `s-${ui}-${ai}`;
+        inp.addEventListener('input', () => {
+          scores[ui][ai] = inp.value === '' ? null : parseFloat(inp.value);
+          inp.classList.toggle('over', scores[ui][ai] !== null && scores[ui][ai] > max);
+          renderGrid();
+        });
+
+        wrap.appendChild(inp);
+        wrap.appendChild(Object.assign(document.createElement('span'), { textContent: `/${max}` }));
+        row.appendChild(nameDiv);
+        row.appendChild(wrap);
+        sec.appendChild(row);
+
+        if (cat === 'assess') {
+          const rrow = document.createElement('div');
+          rrow.className = 'reassess-row';
+          rrow.id = `reassess-row-${ui}`;
+
+          const rname = document.createElement('div');
+          rname.className = 'assign-name';
+          rname.textContent = '🔁 Reassessment score';
+
+          const rwrap = document.createElement('div');
+          rwrap.className = 'score-wrap';
+
+          const rinp = document.createElement('input');
+          rinp.type = 'number'; rinp.min = '0'; rinp.max = String(max); rinp.placeholder = '—';
+          rinp.id = `rs-${ui}`;
+          rinp.addEventListener('input', () => {
+            reassessScores[ui] = rinp.value === '' ? null : parseFloat(rinp.value);
+            rinp.classList.toggle('over', reassessScores[ui] !== null && reassessScores[ui] > max);
+            renderGrid();
+          });
+
+          rwrap.appendChild(rinp);
+          rwrap.appendChild(Object.assign(document.createElement('span'), { textContent: `/${max}` }));
+          rrow.appendChild(rname);
+          rrow.appendChild(rwrap);
+          sec.appendChild(rrow);
+        }
+      });
+
+      body.appendChild(sec);
+    });
+
+    card.appendChild(header);
+    card.appendChild(body);
+    container.appendChild(card);
+  });
+}
+
+function updateUnitLockedState(ui) {
+  const closed      = windowClosed[ui];
+  const card        = document.getElementById(`ucard-${ui}`);
+  const banner      = document.getElementById(`banner-${ui}`);
+  const btext       = document.getElementById(`banner-text-${ui}`);
+  const tlabel      = document.getElementById(`toggle-label-${ui}`);
+  const tinput      = document.getElementById(`toggle-${ui}`);
+  const reassessRow = document.getElementById(`reassess-row-${ui}`);
+
+  card.classList.toggle('window-closed', closed);
+  banner.classList.toggle('closed', closed);
+  if (tinput) tinput.checked = closed;
+  if (tlabel) tlabel.textContent = closed ? 'Closed' : 'Open';
+
+  if (closed) {
+    btext.innerHTML = `🔒 <strong>Window closed.</strong> Missing classwork counts as 0. The higher of your two test scores is kept.`;
+    UNITS[ui].assignments.forEach((a, ai) => {
+      if (a.cat !== 'class') return;
+      const row = document.getElementById(`row-${ui}-${ai}`);
+      if (!row || scores[ui][ai] !== null) return;
+      row.classList.add('locked');
+      const nm = row.querySelector('.assign-name');
+      if (nm && !nm.querySelector('.zero-badge')) {
+        nm.appendChild(Object.assign(document.createElement('span'), { className: 'zero-badge', textContent: '0' }));
+      }
+    });
+    if (reassessRow) {
+      reassessRow.classList.add('locked-row');
+      const rinp = document.getElementById(`rs-${ui}`);
+      if (rinp) rinp.disabled = true;
+    }
+  } else {
+    btext.innerHTML = `⏰ <strong>Reassess window is open.</strong> You have 2 weeks after your test is returned to reassess and turn in missing classwork.`;
+    UNITS[ui].assignments.forEach((a, ai) => {
+      if (a.cat !== 'class') return;
+      const row = document.getElementById(`row-${ui}-${ai}`);
+      if (!row) return;
+      row.classList.remove('locked');
+      row.querySelector('.zero-badge')?.remove();
+    });
+    if (reassessRow) {
+      reassessRow.classList.remove('locked-row');
+      const rinp = document.getElementById(`rs-${ui}`);
+      if (rinp) rinp.disabled = false;
+    }
+  }
+}
+
+function renderBar() {
+  const aData = catTotals('assess');
+  const lData = catTotals('lc');
+  const cData = catTotals('class');
+
+  const aPts = aData ? aData.ratio * 85 : 0;
+  const lPts = lData ? lData.ratio * 10 : 0;
+  const cPts = cData ? cData.ratio * 5  : 0;
+
+  document.getElementById('bseg-assess').style.width = aPts + '%';
+  document.getElementById('bseg-lc').style.width     = lPts + '%';
+  document.getElementById('bseg-class').style.width  = cPts + '%';
+
+  const track = document.getElementById('bar-track');
+  track.querySelectorAll('.bar-threshold').forEach(el => el.remove());
+
+  [
+    { pct: 60, grade: 'D', color: '#888'    },
+    { pct: 70, grade: 'C', color: '#2a7dd6' },
+    { pct: 80, grade: 'B', color: '#2a9d4e' },
+    { pct: 90, grade: 'A', color: '#d64f2a' },
+  ].forEach(({ pct, grade, color }) => {
+    const line = document.createElement('div');
+    line.className = 'bar-threshold';
+    line.style.left = pct + '%';
+    line.innerHTML = `
+      <span class="bar-threshold-grade" style="color:${color}">${grade}</span>
+      <span class="bar-threshold-label">${pct}%</span>
+    `;
+    track.appendChild(line);
+  });
+
+  const axis = document.getElementById('bar-axis');
+  axis.innerHTML = '';
+  for (let p = 0; p <= 100; p += 10) {
+    const lbl = Object.assign(document.createElement('span'), { className: 'bar-axis-label', textContent: p });
+    lbl.style.left = p + '%';
+    axis.appendChild(lbl);
+  }
+}
+
+buildGrid();
+buildUnits();
+renderGrid();
+</script>
+</body>
+</html>
